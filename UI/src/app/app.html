@@ -1,0 +1,142 @@
+<main>
+  <header>
+    <h1>Escale Atlantique</h1>
+    <p>Probabilité d'annulation d'une réservation</p>
+  </header>
+
+  <div class="colonnes">
+    <section class="carte">
+      <h2>La réservation</h2>
+      <form (ngSubmit)="predire()">
+        <div class="grille">
+          <label>Hôtel
+            <select name="hotel" [(ngModel)]="reservation.hotel">
+              @for (valeur of hotels; track valeur) {
+                <option [value]="valeur">{{ valeur }}</option>
+              }
+            </select>
+          </label>
+
+          <label>Mois d'arrivée
+            <select name="arrival_date_month" [(ngModel)]="reservation.arrival_date_month">
+              @for (valeur of mois; track valeur) {
+                <option [value]="valeur">{{ valeur }}</option>
+              }
+            </select>
+          </label>
+
+          <label>Segment de marché
+            <select name="market_segment" [(ngModel)]="reservation.market_segment">
+              @for (valeur of segments; track valeur) {
+                <option [value]="valeur">{{ valeur }}</option>
+              }
+            </select>
+          </label>
+
+          <label>Type d'acompte
+            <select name="deposit_type" [(ngModel)]="reservation.deposit_type">
+              @for (valeur of acomptes; track valeur) {
+                <option [value]="valeur">{{ valeur }}</option>
+              }
+            </select>
+          </label>
+
+          <label>Type de client
+            <select name="customer_type" [(ngModel)]="reservation.customer_type">
+              @for (valeur of typesClient; track valeur) {
+                <option [value]="valeur">{{ valeur }}</option>
+              }
+            </select>
+          </label>
+
+          <label>Pays (code ISO)
+            <input name="country" [(ngModel)]="reservation.country" maxlength="3" />
+          </label>
+
+          <label>Délai avant arrivée (jours)
+            <input type="number" name="lead_time" [(ngModel)]="reservation.lead_time" min="0" max="800" />
+          </label>
+
+          <label>Prix moyen par nuit (€)
+            <input type="number" name="adr" [(ngModel)]="reservation.adr" min="0" max="2000" step="0.01" />
+          </label>
+
+          <label>Nuits de week-end
+            <input type="number" name="stays_in_weekend_nights" [(ngModel)]="reservation.stays_in_weekend_nights" min="0" max="30" />
+          </label>
+
+          <label>Nuits en semaine
+            <input type="number" name="stays_in_week_nights" [(ngModel)]="reservation.stays_in_week_nights" min="0" max="50" />
+          </label>
+
+          <label>Adultes
+            <input type="number" name="adults" [(ngModel)]="reservation.adults" min="0" max="10" />
+          </label>
+
+          <label>Enfants
+            <input type="number" name="children" [(ngModel)]="reservation.children" min="0" max="10" />
+          </label>
+
+          <label>Annulations précédentes
+            <input type="number" name="previous_cancellations" [(ngModel)]="reservation.previous_cancellations" min="0" max="100" />
+          </label>
+
+          <label>Demandes spéciales
+            <input type="number" name="total_of_special_requests" [(ngModel)]="reservation.total_of_special_requests" min="0" max="10" />
+          </label>
+
+          <label>Places de parking
+            <input type="number" name="required_car_parking_spaces" [(ngModel)]="reservation.required_car_parking_spaces" min="0" max="10" />
+          </label>
+        </div>
+
+        <div class="actions">
+          <button type="submit" [disabled]="chargement()">
+            {{ chargement() ? 'Calcul…' : 'Prédire' }}
+          </button>
+          <button type="button" class="secondaire" (click)="reinitialiser()">Réinitialiser</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="carte">
+      <h2>Résultat</h2>
+
+      @if (erreur()) {
+        <p class="alerte">{{ erreur() }}</p>
+      }
+
+      @if (prediction(); as resultat) {
+        <p class="verdict" [class.risque]="resultat.annulation">
+          {{ resultat.annulation ? 'Annulation probable' : 'Annulation peu probable' }}
+        </p>
+        <p class="chiffre">{{ pourcentage(resultat.probabilite_annulation) }}</p>
+        <div class="jauge">
+          <div class="remplissage" [class.risque]="resultat.annulation"
+               [style.width.%]="resultat.probabilite_annulation * 100"></div>
+        </div>
+        <p class="note">
+          Seuil de décision du modèle : 50 %. Essaie de passer les places de parking
+          de 1 à 0 : la probabilité grimpe fortement.
+        </p>
+      } @else if (!erreur()) {
+        <p class="vide">Renseigne une réservation, puis lance la prédiction.</p>
+      }
+    </section>
+  </div>
+
+  <section class="carte">
+    <h2>
+      Journal de l'API
+      <button type="button" class="secondaire" (click)="rafraichirLogs()">Rafraîchir</button>
+    </h2>
+    <p class="note">40 dernières lignes de logs/api.log, les plus récentes en premier.</p>
+    <ul class="logs">
+      @for (ligne of logs(); track $index) {
+        <li [class]="niveau(ligne)">{{ ligne }}</li>
+      } @empty {
+        <li class="vide">Aucune ligne pour le moment.</li>
+      }
+    </ul>
+  </section>
+</main>

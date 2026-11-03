@@ -1,0 +1,19 @@
+:root {
+  --fond: #0f172a;
+  --carte: #1b2537;
+  --bord: #2c3a52;
+  --texte: #e6ebf4;
+  --discret: #93a1b8;
+  --accent: #3b82f6;
+  --risque: #ef4444;
+  --ok: #22c55e;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--fond);
+  color: var(--texte);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}

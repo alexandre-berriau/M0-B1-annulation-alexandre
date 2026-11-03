@@ -1,0 +1,26 @@
+# Environnement virtuel
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Tests et couverture
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Journalisation (tache 4) : les logs ne se versionnent pas
+logs/
+
+# Editeurs et systemes d'exploitation
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Secrets et configuration locale
+.env

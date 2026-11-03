@@ -3,13 +3,17 @@
 API REST qui estime, pour une réservation donnée, la probabilité qu'elle soit annulée.
 Elle expose un modèle scikit-learn livré par l'équipe data d'Escale Atlantique.
 
-Brief **M0-B1** (FastIA) — FastAPI, Pydantic, Loguru, pytest, Docker.
+Une interface web Angular (`UI/`) permet de saisir une réservation, de lire la
+prédiction et de consulter le journal de l'API sans passer par Swagger.
+
+Brief **M0-B1** (FastIA) — FastAPI, Pydantic, Loguru, pytest, Docker, Angular.
 
 ## Prérequis
 
 - **Python 3.11** — obligatoire. `scikit-learn 1.6.1` n'a pas de paquet précompilé
   pour Python 3.14 : l'installation tente une compilation C++ et échoue.
 - Docker, pour la partie conteneurisée (optionnel).
+- Node 20 ou plus, uniquement pour développer l'interface hors Docker (optionnel).
 
 ## Démarrage rapide
 
@@ -25,14 +29,24 @@ uvicorn app.main:app --reload
 
 ## Avec Docker
 
+Les deux services d'un coup — l'API sur le port 8000, l'interface sur le 8001 :
+
+```bash
+docker compose up --build
+```
+
+- Interface : http://localhost:8001
+- API : http://localhost:8000/docs
+
+L'interface attend que l'API soit `healthy` avant de démarrer (`HEALTHCHECK` sur
+`/health`). Les logs sont montés dans `./logs` sur la machine hôte, ils survivent donc
+aux conteneurs.
+
+Pour l'API seule :
+
 ```bash
 docker build -t fastia-annulation:dev .
 docker run --rm -p 8000:8000 fastia-annulation:dev
-```
-
-Puis, depuis la machine hôte :
-
-```bash
 curl http://localhost:8000/health
 ```
 
@@ -82,16 +96,50 @@ négative ou un champ inconnu renvoie **422** sans interrompre le service.
 | `adults`, `children` | 0 à 10 |
 | les autres champs numériques | entiers positifs bornés (voir `app/schemas.py`) |
 
+### `GET /logs`
+
+Les dernières lignes de `logs/api.log`, entre 1 et 500 (50 par défaut). C'est ce que
+l'interface web affiche.
+
+```bash
+curl "http://localhost:8000/logs?lignes=10"
+```
+
+```json
+{"lignes": ["2026-11-03 14:33:17.330 | INFO | app.main:predict:107 - /predict …"]}
+```
+
+⚠️ Cette route expose le contenu des réservations journalisées. Elle convient à un
+usage local ou à un réseau interne, pas à une exposition publique sans contrôle d'accès.
+
+## Interface web
+
+Application Angular 22 dans `UI/`, servie par nginx. Elle appelle l'API sous `/api/`,
+que nginx relaie vers le conteneur `api` : le navigateur ne voit qu'une seule origine,
+aucune configuration CORS n'est donc nécessaire.
+
+Le plus simple est de la lancer avec `docker compose up` (voir plus haut). Pour la
+développer hors Docker, avec l'API lancée en parallèle sur le port 8000 :
+
+```bash
+cd UI
+npm install
+npm start
+```
+
+`proxy.conf.json` redirige alors `/api` vers `http://localhost:8000`.
+
 ## Tests
 
 ```bash
 pytest -v
 ```
 
-24 tests : cas valide, cohérence entre la prédiction et la probabilité, 11 entrées
+28 tests : cas valide, cohérence entre la prédiction et la probabilité, 11 entrées
 refusées en 422, la survie du service après un refus, les deux types d'hôtel,
 5 réservations réelles tirées du CSV, un test de fidélité qui compare la réponse de
-l'API au modèle appelé directement, et les 2 tests de `/health` fournis.
+l'API au modèle appelé directement, 4 tests de `/logs` et les 2 tests de `/health`
+fournis.
 
 ## Journalisation
 
@@ -107,7 +155,10 @@ Le premier appel après le démarrage prend environ 2,7 s, les suivants environ 
 le `lifespan` charge le modèle au démarrage, mais les couches de calcul de scikit-learn
 ne s'initialisent qu'à la première prédiction.
 
-Dans un conteneur, ces logs disparaissent avec lui — monter un volume pour les conserver.
+Avec `docker compose`, `./logs` est monté dans le conteneur : les lignes survivent à
+son arrêt et restent lisibles depuis la machine hôte. Le service fixe `TZ=Europe/Paris`,
+sinon le conteneur journaliserait en UTC et les horodatages seraient décalés par rapport
+à un lancement local dans le même fichier.
 
 ## Le modèle
 
@@ -137,12 +188,18 @@ model/
 data/
   hotel_bookings_sample.csv   # extrait du jeu d'entraînement (1 000 réservations)
   exemple_reservation.json    # corps de requête d'exemple
-mini-cours/        # supports de formation fournis avec le squelette
 tests/
   conftest.py      # fixtures client et reservation_valide
   test_health.py   # tests de /health
   test_predict.py  # tests de /predict
+  test_logs.py     # tests de /logs
+UI/                # interface Angular servie par nginx
+  src/app/         # composant unique : formulaire, résultat, journal
+  nginx.conf       # sert les fichiers statiques et relaie /api vers l'API
+  Dockerfile       # build Node puis image nginx
+mini-cours/        # supports de formation fournis avec le squelette
 Dockerfile
+docker-compose.yml # API sur 8000, interface sur 8001
 requirements.txt   # dépendances, versions figées
 pytest.ini
 ```

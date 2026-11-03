@@ -1,0 +1,21 @@
+# Le venv : 375 Mo compilés pour Windows, inutilisables dans un Linux
+.venv/
+venv/
+env/
+
+# Caches Python
+__pycache__/
+*.py[cod]
+
+# Inutiles pour faire tourner le service
+.git/
+.gitignore
+.dockerignore
+Dockerfile
+README.md
+pytest.ini
+.pytest_cache/
+tests/
+mini-cours/
+data/
+logs/

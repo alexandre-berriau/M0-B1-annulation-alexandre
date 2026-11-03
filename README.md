@@ -1,31 +1,15 @@
 # Escale Atlantique — API de prédiction d'annulation
 
-> Squelette de départ du brief **M0-B1** (FastIA). 
+API REST qui estime, pour une réservation donnée, la probabilité qu'elle soit annulée.
+Elle expose un modèle scikit-learn livré par l'équipe data d'Escale Atlantique.
 
-## Le contexte
+Brief **M0-B1** (FastIA) — FastAPI, Pydantic, Loguru, pytest, Docker.
 
-Escale Atlantique (un hôtel urbain et un resort) subit environ une annulation pour trois réservations. Son équipe data a entraîné un modèle qui estime la probabilité d'annulation d'une réservation. Ce repo expose ce modèle via une API REST.
+## Prérequis
 
-## Structure
-
-```
-app/
-  main.py          # application FastAPI (lifespan, /health, /predict à compléter)
-  schemas.py       # schémas Pydantic (entrées à contraindre)
-model/
-  cancellation_model.joblib   # modèle livré (pipeline scikit-learn) — ne pas modifier
-  model_info.json             # fiche d'identité du modèle
-  train_baseline.py           # script d'entraînement, pour information
-data/
-  hotel_bookings_sample.csv   # extrait du jeu d'entraînement (1 000 réservations)
-  exemple_reservation.json    # exemple de corps de requête pour /predict
-tests/
-  conftest.py      # fixture `client` (TestClient)
-  test_health.py   # 2 tests fournis
-Dockerfile         # à compléter
-pytest.ini         # configuration de pytest
-requirements.txt   # dépendances (versions figées)
-```
+- **Python 3.11** — obligatoire. `scikit-learn 1.6.1` n'a pas de paquet précompilé
+  pour Python 3.14 : l'installation tente une compilation C++ et échoue.
+- Docker, pour la partie conteneurisée (optionnel).
 
 ## Démarrage rapide
 
@@ -37,12 +21,133 @@ uvicorn app.main:app --reload
 ```
 
 - Santé du service : http://localhost:8000/health
-- Documentation interactive : http://localhost:8000/docs
+- Documentation interactive : http://localhost:8000/docs — le bouton *Try it out* est pré-rempli
+
+## Avec Docker
+
+```bash
+docker build -t fastia-annulation:dev .
+docker run --rm -p 8000:8000 fastia-annulation:dev
+```
+
+Puis, depuis la machine hôte :
+
+```bash
+curl http://localhost:8000/health
+```
+
+L'image contient 375 Mo de fichiers et pèse 117 Mo compressée. `docker images` peut
+afficher 520 Mo : cette colonne additionne les blobs compressés **et** l'arborescence
+décompressée, elle compte donc deux fois les mêmes données. Pour la taille réelle :
+
+```bash
+docker run --rm --entrypoint sh fastia-annulation:dev -c "du -sm /"
+```
+
+## Les routes
+
+### `GET /health`
+
+```json
+{"status": "ok", "model_loaded": true}
+```
+
+### `POST /predict`
+
+```bash
+curl -X POST http://localhost:8000/predict \
+  -H "Content-Type: application/json" \
+  -d @data/exemple_reservation.json
+```
+
+```json
+{"annulation": false, "probabilite_annulation": 0.000265}
+```
+
+`annulation` est le verdict du modèle, `probabilite_annulation` est comprise entre 0 et 1.
+
+Les 15 champs sont tous obligatoires. Une valeur hors des listes ci-dessous, une valeur
+négative ou un champ inconnu renvoie **422** sans interrompre le service.
+
+| Champ | Valeurs acceptées |
+|---|---|
+| `hotel` | `City Hotel`, `Resort Hotel` |
+| `arrival_date_month` | les 12 mois en anglais (`January`…`December`) |
+| `market_segment` | `Aviation`, `Complementary`, `Corporate`, `Direct`, `Groups`, `Offline TA/TO`, `Online TA` |
+| `deposit_type` | `No Deposit`, `Non Refund`, `Refundable` |
+| `customer_type` | `Contract`, `Group`, `Transient`, `Transient-Party` |
+| `country` | code ISO en majuscules, 2 ou 3 lettres (`FRA`, `PRT`, `CN`) |
+| `adr` | 0 à 2000 (prix moyen par nuit, en euros) |
+| `lead_time` | 0 à 800 (jours avant l'arrivée) |
+| `adults`, `children` | 0 à 10 |
+| les autres champs numériques | entiers positifs bornés (voir `app/schemas.py`) |
+
+## Tests
 
 ```bash
 pytest -v
 ```
 
+24 tests : cas valide, cohérence entre la prédiction et la probabilité, 11 entrées
+refusées en 422, la survie du service après un refus, les deux types d'hôtel,
+5 réservations réelles tirées du CSV, un test de fidélité qui compare la réponse de
+l'API au modèle appelé directement, et les 2 tests de `/health` fournis.
+
+## Journalisation
+
+Chaque appel écrit une ligne dans `logs/api.log` (rotation à 5 Mo, rétention 7 jours,
+compression zip). Le dossier n'est pas versionné.
+
+```
+INFO    | /predict entree={...} annulation=True proba=0.5519 duree=7.7ms
+WARNING | /predict refusé en 422 : adults=-3 (Input should be greater than or equal to 0)
+```
+
+Le premier appel après le démarrage prend environ 2,7 s, les suivants environ 7 ms :
+le `lifespan` charge le modèle au démarrage, mais les couches de calcul de scikit-learn
+ne s'initialisent qu'à la première prédiction.
+
+Dans un conteneur, ces logs disparaissent avec lui — monter un volume pour les conserver.
+
+## Le modèle
+
+Livré dans `model/cancellation_model.joblib` : un `Pipeline` scikit-learn contenant
+**à la fois** la préparation des données (imputation, encodage one-hot) et le
+classifieur `HistGradientBoostingClassifier`. Les variables catégorielles n'ont donc
+pas à être encodées avant l'appel — le pipeline applique la transformation apprise à
+l'entraînement. Il attend un `DataFrame` pandas, car il sélectionne ses colonnes par nom.
+
+Performances annoncées sur le jeu de test : accuracy 0,857 · F1 0,797 · ROC-AUC 0,933
+(voir `model/model_info.json`).
+
+Les versions de `requirements.txt` sont figées : `scikit-learn` **doit** rester en
+1.6.1, version utilisée pour l'entraînement. Le chemin du modèle est surchargeable par
+la variable d'environnement `MODEL_PATH`.
+
+## Structure
+
+```
+app/
+  main.py          # application FastAPI : lifespan, /health, /predict, logs
+  schemas.py       # schémas Pydantic : validation des entrées et des sorties
+model/
+  cancellation_model.joblib   # modèle livré — ne pas modifier
+  model_info.json             # fiche d'identité du modèle
+  train_baseline.py           # script d'entraînement, pour information
+data/
+  hotel_bookings_sample.csv   # extrait du jeu d'entraînement (1 000 réservations)
+  exemple_reservation.json    # corps de requête d'exemple
+mini-cours/        # supports de formation fournis avec le squelette
+tests/
+  conftest.py      # fixtures client et reservation_valide
+  test_health.py   # tests de /health
+  test_predict.py  # tests de /predict
+Dockerfile
+requirements.txt   # dépendances, versions figées
+pytest.ini
+```
+
 ## Données
 
-Extrait de *Hotel Booking Demand* — N. Antonio, A. de Almeida, L. Nunes (2019), *Data in Brief* 22, 41-49. Licence CC BY 4.0.
+Extrait de *Hotel Booking Demand* — N. Antonio, A. de Almeida, L. Nunes (2019),
+*Data in Brief* 22, 41-49. Licence CC BY 4.0.

@@ -1,0 +1,23 @@
+services:
+  api:
+    build: .
+    image: fastia-annulation:dev
+    ports:
+      - "8000:8000"
+    environment:
+      # Sans ça le conteneur journalise en UTC, décalé d'une heure par rapport
+      # aux lignes écrites par un lancement local dans le même fichier
+      - TZ=Europe/Paris
+    volumes:
+      # Les logs survivent au conteneur, et l'interface les lit via /api/logs
+      - ./logs:/app/logs
+
+  ui:
+    build: ./UI
+    image: fastia-annulation-ui:dev
+    ports:
+      - "8001:8001"
+    depends_on:
+      # On attend que /health réponde, sinon nginx relaierait vers une API absente
+      api:
+        condition: service_healthy

@@ -7,6 +7,10 @@ env/
 __pycache__/
 *.py[cod]
 
+# L'interface a son propre Dockerfile : son node_modules ne doit pas partir
+# dans le contexte de build de l'API
+UI/
+
 # Inutiles pour faire tourner le service
 .git/
 .gitignore

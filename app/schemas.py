@@ -96,3 +96,31 @@ class LogsResponse(BaseModel):
     """Réponse de /logs."""
 
     lignes: list[str]
+
+
+class BatchRequest(BaseModel):
+    """Corps de /predict/batch."""
+
+    reservations: list[Booking] = Field(min_length=1, max_length=500)
+
+
+class BatchResponse(BaseModel):
+    """Réponse de /predict/batch, dans l'ordre des réservations reçues."""
+
+    predictions: list[PredictionResponse]
+
+
+class InfoResponse(BaseModel):
+    """Fiche d'identité du modèle chargé."""
+
+    # Pydantic réserve le préfixe model_ : sans ça, model_name déclenche un
+    # avertissement. On garde les noms de model_info.json tels quels.
+    model_config = ConfigDict(protected_namespaces=())
+
+    model_name: str
+    version: str
+    trained_on: str
+    algorithm: str
+    scikit_learn_version: str
+    features: list[str]
+    test_metrics: dict[str, float]

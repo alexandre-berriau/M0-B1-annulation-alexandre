@@ -1,5 +1,6 @@
 """API de prédiction d'annulation — Escale Atlantique (mission FastIA)."""
 
+import json
 import os
 import sys
 import time
@@ -14,10 +15,18 @@ from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from loguru import logger
 
-from app.schemas import Booking, LogsResponse, PredictionResponse
+from app.schemas import (
+    BatchRequest,
+    BatchResponse,
+    Booking,
+    InfoResponse,
+    LogsResponse,
+    PredictionResponse,
+)
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 MODEL_PATH = Path(os.getenv("MODEL_PATH", ROOT_DIR / "model" / "cancellation_model.joblib"))
+INFO_PATH = MODEL_PATH.parent / "model_info.json"
 LOG_PATH = ROOT_DIR / "logs" / "api.log"
 
 # Journalisation : remove() d'abord, sinon le sink console par défaut double les lignes
@@ -40,6 +49,7 @@ state: dict = {}
 async def lifespan(app: FastAPI):
     # Exécuté UNE fois au démarrage : on charge le modèle en mémoire
     state["model"] = joblib.load(MODEL_PATH)
+    state["info"] = json.loads(INFO_PATH.read_text(encoding="utf-8"))
     logger.info("Modèle chargé depuis {}", MODEL_PATH)
     yield
     # Exécuté à l'arrêt du serveur
@@ -112,6 +122,48 @@ def predict(booking: Booking) -> PredictionResponse:
         duree_ms,
     )
     return reponse
+
+
+@app.post("/predict/batch", response_model=BatchResponse)
+def predict_batch(requete: BatchRequest) -> BatchResponse:
+    """Prédit une liste de réservations en un seul passage dans le modèle."""
+    debut = time.perf_counter()
+
+    model = state.get("model")
+    if model is None:
+        raise HTTPException(status_code=503, detail="Modèle non chargé")
+
+    # Un seul DataFrame pour toutes les réservations : le modèle est vectorisé,
+    # 500 lignes d'un coup coûtent bien moins que 500 appels séparés.
+    lignes = pd.DataFrame([reservation.model_dump() for reservation in requete.reservations])
+    lignes = lignes[list(model.feature_names_in_)]
+
+    annulations = model.predict(lignes)
+    probabilites = model.predict_proba(lignes)[:, 1]
+    predictions = [
+        PredictionResponse(annulation=bool(annulation), probabilite_annulation=float(probabilite))
+        for annulation, probabilite in zip(annulations, probabilites)
+    ]
+
+    duree_ms = (time.perf_counter() - debut) * 1000
+    logger.info(
+        "/predict/batch {}/{} annulations prédites, duree={:.1f}ms",
+        sum(p.annulation for p in predictions),
+        len(predictions),
+        duree_ms,
+    )
+    return BatchResponse(predictions=predictions)
+
+
+@app.get("/info", response_model=InfoResponse)
+def info() -> InfoResponse:
+    """Nom, version et colonnes attendues du modèle chargé."""
+    fiche = state.get("info")
+    if fiche is None:
+        raise HTTPException(status_code=503, detail="Modèle non chargé")
+    # Les colonnes viennent du modèle lui-même, pas du JSON : si les deux
+    # divergeaient, c'est le modèle qui fait foi.
+    return InfoResponse(**{**fiche, "features": list(state["model"].feature_names_in_)})
 
 
 @app.get("/logs", response_model=LogsResponse)

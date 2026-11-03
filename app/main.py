@@ -3,26 +3,28 @@
 import os
 import sys
 import time
+from collections import deque
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 import joblib
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from loguru import logger
 
-from app.schemas import Booking, PredictionResponse
+from app.schemas import Booking, LogsResponse, PredictionResponse
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 MODEL_PATH = Path(os.getenv("MODEL_PATH", ROOT_DIR / "model" / "cancellation_model.joblib"))
+LOG_PATH = ROOT_DIR / "logs" / "api.log"
 
 # Journalisation : remove() d'abord, sinon le sink console par défaut double les lignes
 logger.remove()
 logger.add(sys.stderr, level="INFO")
 logger.add(
-    ROOT_DIR / "logs" / "api.log",
+    LOG_PATH,
     level="INFO",
     rotation="5 MB",  # nouveau fichier au-delà de 5 Mo
     retention="7 days",  # les plus vieux sont supprimés
@@ -110,3 +112,14 @@ def predict(booking: Booking) -> PredictionResponse:
         duree_ms,
     )
     return reponse
+
+
+@app.get("/logs", response_model=LogsResponse)
+def logs(lignes: int = Query(50, ge=1, le=500)) -> LogsResponse:
+    """Les dernières lignes de logs/api.log, affichées par l'interface web."""
+    if not LOG_PATH.exists():
+        return LogsResponse(lignes=[])
+    with LOG_PATH.open(encoding="utf-8") as fichier:
+        # deque(maxlen=...) ne garde que la fin : inutile de charger tout le fichier
+        dernieres = deque(fichier, maxlen=lignes)
+    return LogsResponse(lignes=[ligne.rstrip() for ligne in dernieres])

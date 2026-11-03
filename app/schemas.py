@@ -90,3 +90,9 @@ class PredictionResponse(BaseModel):
 
     annulation: bool
     probabilite_annulation: float = Field(ge=0.0, le=1.0)
+
+
+class LogsResponse(BaseModel):
+    """Réponse de /logs."""
+
+    lignes: list[str]

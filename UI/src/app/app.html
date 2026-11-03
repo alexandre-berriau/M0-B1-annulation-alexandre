@@ -1,129 +1,263 @@
 <main>
   <header>
-    <h1>Escale Atlantique</h1>
-    <p>Probabilité d'annulation d'une réservation</p>
+    <div>
+      <h1>Escale Atlantique</h1>
+      <p>Probabilité d'annulation d'une réservation</p>
+    </div>
+    @if (info(); as fiche) {
+      <div class="badge" title="Algorithme : {{ fiche.algorithm }}">
+        <strong>{{ fiche.model_name }}</strong> v{{ fiche.version }}
+        <span>entraîné le {{ fiche.trained_on }}</span>
+      </div>
+    }
   </header>
 
-  <div class="colonnes">
+  <nav class="onglets">
+    <button type="button" [class.actif]="onglet() === 'saisie'" (click)="onglet.set('saisie')">
+      Une réservation
+    </button>
+    <button type="button" [class.actif]="onglet() === 'fichier'" (click)="onglet.set('fichier')">
+      Un fichier CSV
+    </button>
+  </nav>
+
+  @if (onglet() === 'saisie') {
+    <div class="colonnes">
+      <section class="carte">
+        <h2>La réservation</h2>
+        <form (ngSubmit)="predire()">
+          <div class="grille">
+            <label>Hôtel
+              <select name="hotel" [(ngModel)]="reservation.hotel">
+                @for (valeur of hotels; track valeur) {
+                  <option [value]="valeur">{{ valeur }}</option>
+                }
+              </select>
+            </label>
+
+            <label>Mois d'arrivée
+              <select name="arrival_date_month" [(ngModel)]="reservation.arrival_date_month">
+                @for (valeur of mois; track valeur) {
+                  <option [value]="valeur">{{ valeur }}</option>
+                }
+              </select>
+            </label>
+
+            <label>Segment de marché
+              <select name="market_segment" [(ngModel)]="reservation.market_segment">
+                @for (valeur of segments; track valeur) {
+                  <option [value]="valeur">{{ valeur }}</option>
+                }
+              </select>
+            </label>
+
+            <label>Type d'acompte
+              <select name="deposit_type" [(ngModel)]="reservation.deposit_type">
+                @for (valeur of acomptes; track valeur) {
+                  <option [value]="valeur">{{ valeur }}</option>
+                }
+              </select>
+            </label>
+
+            <label>Type de client
+              <select name="customer_type" [(ngModel)]="reservation.customer_type">
+                @for (valeur of typesClient; track valeur) {
+                  <option [value]="valeur">{{ valeur }}</option>
+                }
+              </select>
+            </label>
+
+            <label>Pays (code ISO)
+              <input name="country" [(ngModel)]="reservation.country" maxlength="3" />
+            </label>
+
+            <label>Délai avant arrivée (jours)
+              <input type="number" name="lead_time" [(ngModel)]="reservation.lead_time" min="0" max="800" />
+            </label>
+
+            <label>Prix moyen par nuit (€)
+              <input type="number" name="adr" [(ngModel)]="reservation.adr" min="0" max="2000" step="0.01" />
+            </label>
+
+            <label>Nuits de week-end
+              <input type="number" name="stays_in_weekend_nights" [(ngModel)]="reservation.stays_in_weekend_nights" min="0" max="30" />
+            </label>
+
+            <label>Nuits en semaine
+              <input type="number" name="stays_in_week_nights" [(ngModel)]="reservation.stays_in_week_nights" min="0" max="50" />
+            </label>
+
+            <label>Adultes
+              <input type="number" name="adults" [(ngModel)]="reservation.adults" min="0" max="10" />
+            </label>
+
+            <label>Enfants
+              <input type="number" name="children" [(ngModel)]="reservation.children" min="0" max="10" />
+            </label>
+
+            <label>Annulations précédentes
+              <input type="number" name="previous_cancellations" [(ngModel)]="reservation.previous_cancellations" min="0" max="100" />
+            </label>
+
+            <label>Demandes spéciales
+              <input type="number" name="total_of_special_requests" [(ngModel)]="reservation.total_of_special_requests" min="0" max="10" />
+            </label>
+
+            <label>Places de parking
+              <input type="number" name="required_car_parking_spaces" [(ngModel)]="reservation.required_car_parking_spaces" min="0" max="10" />
+            </label>
+          </div>
+
+          <div class="actions">
+            <button type="submit" [disabled]="chargement()">
+              {{ chargement() ? 'Calcul…' : 'Prédire' }}
+            </button>
+            <button type="button" class="secondaire" (click)="reinitialiser()">Réinitialiser</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="carte">
+        <h2>Résultat</h2>
+
+        @if (erreur()) {
+          <p class="alerte">{{ erreur() }}</p>
+        }
+
+        @if (prediction(); as resultat) {
+          <p class="verdict" [class.risque]="resultat.annulation">
+            {{ resultat.annulation ? 'Annulation probable' : 'Annulation peu probable' }}
+          </p>
+          <p class="chiffre">{{ pourcentage(resultat.probabilite_annulation) }}</p>
+          <div class="jauge">
+            <div class="remplissage" [class.risque]="resultat.annulation"
+                 [style.width.%]="resultat.probabilite_annulation * 100"></div>
+          </div>
+          <p class="note">
+            Seuil de décision du modèle : 50 %. Essaie de passer les places de parking
+            de 1 à 0 : la probabilité grimpe fortement.
+          </p>
+        } @else if (!erreur()) {
+          <p class="vide">Renseigne une réservation, puis lance la prédiction.</p>
+        }
+      </section>
+    </div>
+  }
+
+  @if (onglet() === 'fichier') {
     <section class="carte">
-      <h2>La réservation</h2>
-      <form (ngSubmit)="predire()">
-        <div class="grille">
-          <label>Hôtel
-            <select name="hotel" [(ngModel)]="reservation.hotel">
-              @for (valeur of hotels; track valeur) {
-                <option [value]="valeur">{{ valeur }}</option>
-              }
-            </select>
-          </label>
+      <h2>Importer un fichier de réservations</h2>
+      <p class="note">
+        Un CSV avec une ligne d'en-tête contenant au moins les 15 colonnes du modèle.
+        Le fichier <code>data/hotel_bookings_sample.csv</code> du dépôt convient tel quel.
+        Les lignes à valeur manquante sont écartées, et l'envoi se fait par lots de 500.
+      </p>
 
-          <label>Mois d'arrivée
-            <select name="arrival_date_month" [(ngModel)]="reservation.arrival_date_month">
-              @for (valeur of mois; track valeur) {
-                <option [value]="valeur">{{ valeur }}</option>
-              }
-            </select>
-          </label>
+      <div class="actions">
+        <label class="fichier">
+          <input type="file" accept=".csv,text/csv" (change)="importer($event)"
+                 [disabled]="lotEnCours()" />
+          <span>Choisir un fichier…</span>
+        </label>
+        @if (fichierNom()) {
+          <span class="vide">{{ fichierNom() }}</span>
+        }
+      </div>
 
-          <label>Segment de marché
-            <select name="market_segment" [(ngModel)]="reservation.market_segment">
-              @for (valeur of segments; track valeur) {
-                <option [value]="valeur">{{ valeur }}</option>
-              }
-            </select>
-          </label>
-
-          <label>Type d'acompte
-            <select name="deposit_type" [(ngModel)]="reservation.deposit_type">
-              @for (valeur of acomptes; track valeur) {
-                <option [value]="valeur">{{ valeur }}</option>
-              }
-            </select>
-          </label>
-
-          <label>Type de client
-            <select name="customer_type" [(ngModel)]="reservation.customer_type">
-              @for (valeur of typesClient; track valeur) {
-                <option [value]="valeur">{{ valeur }}</option>
-              }
-            </select>
-          </label>
-
-          <label>Pays (code ISO)
-            <input name="country" [(ngModel)]="reservation.country" maxlength="3" />
-          </label>
-
-          <label>Délai avant arrivée (jours)
-            <input type="number" name="lead_time" [(ngModel)]="reservation.lead_time" min="0" max="800" />
-          </label>
-
-          <label>Prix moyen par nuit (€)
-            <input type="number" name="adr" [(ngModel)]="reservation.adr" min="0" max="2000" step="0.01" />
-          </label>
-
-          <label>Nuits de week-end
-            <input type="number" name="stays_in_weekend_nights" [(ngModel)]="reservation.stays_in_weekend_nights" min="0" max="30" />
-          </label>
-
-          <label>Nuits en semaine
-            <input type="number" name="stays_in_week_nights" [(ngModel)]="reservation.stays_in_week_nights" min="0" max="50" />
-          </label>
-
-          <label>Adultes
-            <input type="number" name="adults" [(ngModel)]="reservation.adults" min="0" max="10" />
-          </label>
-
-          <label>Enfants
-            <input type="number" name="children" [(ngModel)]="reservation.children" min="0" max="10" />
-          </label>
-
-          <label>Annulations précédentes
-            <input type="number" name="previous_cancellations" [(ngModel)]="reservation.previous_cancellations" min="0" max="100" />
-          </label>
-
-          <label>Demandes spéciales
-            <input type="number" name="total_of_special_requests" [(ngModel)]="reservation.total_of_special_requests" min="0" max="10" />
-          </label>
-
-          <label>Places de parking
-            <input type="number" name="required_car_parking_spaces" [(ngModel)]="reservation.required_car_parking_spaces" min="0" max="10" />
-          </label>
-        </div>
-
-        <div class="actions">
-          <button type="submit" [disabled]="chargement()">
-            {{ chargement() ? 'Calcul…' : 'Prédire' }}
-          </button>
-          <button type="button" class="secondaire" (click)="reinitialiser()">Réinitialiser</button>
-        </div>
-      </form>
+      @if (lotEnCours()) {
+        <p class="note">Envoi en cours… {{ progression() }} réservations scorées.</p>
+      }
+      @if (lotErreur()) {
+        <p class="alerte">{{ lotErreur() }}</p>
+      }
     </section>
 
-    <section class="carte">
-      <h2>Résultat</h2>
+    @if (resume(); as bilan) {
+      <section class="carte">
+        <h2>Bilan du fichier</h2>
 
-      @if (erreur()) {
-        <p class="alerte">{{ erreur() }}</p>
-      }
-
-      @if (prediction(); as resultat) {
-        <p class="verdict" [class.risque]="resultat.annulation">
-          {{ resultat.annulation ? 'Annulation probable' : 'Annulation peu probable' }}
-        </p>
-        <p class="chiffre">{{ pourcentage(resultat.probabilite_annulation) }}</p>
-        <div class="jauge">
-          <div class="remplissage" [class.risque]="resultat.annulation"
-               [style.width.%]="resultat.probabilite_annulation * 100"></div>
+        <div class="tuiles">
+          <div class="tuile">
+            <span class="valeur">{{ bilan.total }}</span>
+            <span class="libelle">réservations scorées</span>
+          </div>
+          <div class="tuile">
+            <span class="valeur risque">{{ bilan.annulations }}</span>
+            <span class="libelle">annulations prédites</span>
+          </div>
+          <div class="tuile">
+            <span class="valeur">{{ pourcentage(bilan.annulations / bilan.total) }}</span>
+            <span class="libelle">taux d'annulation</span>
+          </div>
+          <div class="tuile">
+            <span class="valeur">{{ pourcentage(bilan.probabiliteMoyenne) }}</span>
+            <span class="libelle">probabilité moyenne</span>
+          </div>
         </div>
-        <p class="note">
-          Seuil de décision du modèle : 50 %. Essaie de passer les places de parking
-          de 1 à 0 : la probabilité grimpe fortement.
-        </p>
-      } @else if (!erreur()) {
-        <p class="vide">Renseigne une réservation, puis lance la prédiction.</p>
-      }
+
+        @if (ignorees() > 0) {
+          <p class="note">
+            {{ ignorees() }} ligne(s) écartée(s) : au moins une des 15 colonnes du modèle
+            était vide. Envoyées telles quelles, elles auraient fait refuser tout le lot.
+          </p>
+        }
+
+        <h2>Les 10 réservations les plus à risque</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Hôtel</th>
+              <th>Pays</th>
+              <th>Mois</th>
+              <th class="nombre">Délai</th>
+              <th class="nombre">Prix/nuit</th>
+              <th class="nombre">Probabilité</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (item of bilan.plusRisquees; track $index) {
+              <tr>
+                <td>{{ item.reservation.hotel }}</td>
+                <td>{{ item.reservation.country }}</td>
+                <td>{{ item.reservation.arrival_date_month }}</td>
+                <td class="nombre">{{ item.reservation.lead_time }} j</td>
+                <td class="nombre">{{ item.reservation.adr }} €</td>
+                <td class="nombre" [class.risque]="item.prediction.annulation">
+                  {{ pourcentage(item.prediction.probabilite_annulation) }}
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </section>
+    }
+  }
+
+  @if (info(); as fiche) {
+    <section class="carte">
+      <h2>Le modèle</h2>
+      <div class="tuiles">
+        @for (metrique of fiche.test_metrics | keyvalue; track metrique.key) {
+          <div class="tuile">
+            <span class="valeur">{{ metrique.value }}</span>
+            <span class="libelle">{{ metrique.key }}</span>
+          </div>
+        }
+      </div>
+      <p class="note">
+        {{ fiche.algorithm }}, scikit-learn {{ fiche.scikit_learn_version }}.
+        Métriques mesurées sur le jeu de test au moment de l'entraînement.
+      </p>
+      <details>
+        <summary>Les {{ fiche.features.length }} colonnes attendues</summary>
+        <ul class="colonnes-modele">
+          @for (colonne of fiche.features; track colonne) {
+            <li>{{ colonne }}</li>
+          }
+        </ul>
+      </details>
     </section>
-  </div>
+  }
 
   <section class="carte">
     <h2>

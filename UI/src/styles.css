@@ -1,3 +1,5 @@
+/* Styles communs : couleurs, cartes, contrôles de formulaire, tableaux. */
+
 :root {
   --fond: #0f172a;
   --carte: #1b2537;
@@ -17,3 +19,80 @@ body {
   color: var(--texte);
   font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
 }
+
+.carte {
+  background: var(--carte);
+  border: 1px solid var(--bord);
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+.carte h2 {
+  margin: 0 0 16px;
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--discret);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+label { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--discret); }
+
+input, select {
+  background: var(--fond);
+  color: var(--texte);
+  border: 1px solid var(--bord);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font: inherit;
+}
+input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+button {
+  background: var(--accent);
+  color: #fff;
+  border: 0;
+  border-radius: 6px;
+  padding: 9px 18px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+button:disabled { opacity: 0.55; cursor: progress; }
+button.secondaire {
+  background: transparent;
+  border: 1px solid var(--bord);
+  color: var(--discret);
+  font-weight: 400;
+  padding: 6px 12px;
+}
+
+.alerte {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid var(--risque);
+  color: #fecaca;
+  font-size: 13px;
+}
+.note { margin: 12px 0 0; font-size: 12px; color: var(--discret); }
+.vide { color: var(--discret); font-size: 13px; }
+
+table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+th, td { padding: 7px 10px; text-align: left; border-bottom: 1px solid var(--bord); }
+th {
+  color: var(--discret);
+  font-weight: 500;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+td.nombre, th.nombre { text-align: right; font-variant-numeric: tabular-nums; }
+td.risque { color: var(--risque); font-weight: 600; }
+
+details { margin-top: 14px; font-size: 13px; }
+summary { cursor: pointer; color: var(--discret); }

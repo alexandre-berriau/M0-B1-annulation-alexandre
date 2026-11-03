@@ -154,6 +154,26 @@ Application Angular 22 dans `UI/`, servie par nginx. Elle appelle l'API sous `/a
 que nginx relaie vers le conteneur `api` : le navigateur ne voit qu'une seule origine,
 aucune configuration CORS n'est donc nécessaire.
 
+Deux onglets :
+
+- **Une réservation** — le formulaire des 15 champs, avec listes fermées sur les
+  champs catégoriels, et le résultat affiché en probabilité.
+- **Un fichier CSV** — on dépose un export hôtelier, l'interface en extrait les
+  15 colonnes du modèle et affiche un bilan : nombre de réservations scorées, taux
+  d'annulation, probabilité moyenne et les 10 réservations les plus à risque.
+
+Sous les onglets, une carte reprend les informations de `/info` (version du modèle,
+date d'entraînement, métriques, colonnes attendues) et le journal de l'API se
+rafraîchit après chaque appel, refus en 422 compris.
+
+Deux détails de l'import CSV :
+
+- **Les lignes incomplètes sont écartées** et leur nombre est affiché. Le fichier
+  d'exemple en contient 4 sans pays ; envoyées telles quelles, elles feraient refuser
+  tout le lot en 422.
+- **L'envoi est découpé en lots de 500**, la borne de `/predict/batch`. Un fichier de
+  1 000 lignes part donc en deux appels.
+
 Le plus simple est de la lancer avec `docker compose up` (voir plus haut). Pour la
 développer hors Docker, avec l'API lancée en parallèle sur le port 8000 :
 
@@ -232,7 +252,7 @@ tests/
   test_info.py     # tests de /info
   test_predict_batch.py  # tests de /predict/batch
 UI/                # interface Angular servie par nginx
-  src/app/         # composant unique : formulaire, résultat, journal
+  src/app/         # composant unique : formulaire, import CSV, bilan, journal
   nginx.conf       # sert les fichiers statiques et relaie /api vers l'API
   Dockerfile       # build Node puis image nginx
 mini-cours/        # supports de formation fournis avec le squelette

@@ -96,6 +96,42 @@ négative ou un champ inconnu renvoie **422** sans interrompre le service.
 | `adults`, `children` | 0 à 10 |
 | les autres champs numériques | entiers positifs bornés (voir `app/schemas.py`) |
 
+### `POST /predict/batch`
+
+Une liste de 1 à 500 réservations, scorées en un seul passage dans le modèle. Les
+prédictions reviennent dans l'ordre d'envoi.
+
+```bash
+curl -X POST http://localhost:8000/predict/batch   -H "Content-Type: application/json"   -d '{"reservations": [ … ]}'
+```
+
+```json
+{"predictions": [{"annulation": false, "probabilite_annulation": 0.000265}]}
+```
+
+Le modèle est vectorisé : 300 réservations prennent 13 ms en un lot contre 2452 ms
+une par une, soit 180 fois moins. Si une seule réservation du lot est invalide, le
+lot entier est refusé en 422.
+
+### `GET /info`
+
+Fiche d'identité du modèle chargé.
+
+```json
+{
+  "model_name": "cancellation_model",
+  "version": "1.0.0",
+  "trained_on": "2026-10-27",
+  "algorithm": "HistGradientBoostingClassifier",
+  "scikit_learn_version": "1.6.1",
+  "features": ["hotel", "arrival_date_month", "…"],
+  "test_metrics": {"accuracy": 0.857, "f1": 0.797, "roc_auc": 0.933}
+}
+```
+
+Les métadonnées viennent de `model/model_info.json`, mais `features` est lu sur le
+modèle lui-même : en cas de divergence entre les deux, c'est le modèle qui fait foi.
+
 ### `GET /logs`
 
 Les dernières lignes de `logs/api.log`, entre 1 et 500 (50 par défaut). C'est ce que
@@ -135,11 +171,11 @@ npm start
 pytest -v
 ```
 
-28 tests : cas valide, cohérence entre la prédiction et la probabilité, 11 entrées
+37 tests : cas valide, cohérence entre la prédiction et la probabilité, 11 entrées
 refusées en 422, la survie du service après un refus, les deux types d'hôtel,
 5 réservations réelles tirées du CSV, un test de fidélité qui compare la réponse de
-l'API au modèle appelé directement, 4 tests de `/logs` et les 2 tests de `/health`
-fournis.
+l'API au modèle appelé directement, 6 tests de `/predict/batch`, 3 de `/info`,
+4 de `/logs` et les 2 tests de `/health` fournis.
 
 ## Journalisation
 
@@ -179,7 +215,7 @@ la variable d'environnement `MODEL_PATH`.
 
 ```
 app/
-  main.py          # application FastAPI : lifespan, /health, /predict, logs
+  main.py          # application FastAPI : lifespan et les 5 routes
   schemas.py       # schémas Pydantic : validation des entrées et des sorties
 model/
   cancellation_model.joblib   # modèle livré — ne pas modifier
@@ -193,6 +229,8 @@ tests/
   test_health.py   # tests de /health
   test_predict.py  # tests de /predict
   test_logs.py     # tests de /logs
+  test_info.py     # tests de /info
+  test_predict_batch.py  # tests de /predict/batch
 UI/                # interface Angular servie par nginx
   src/app/         # composant unique : formulaire, résultat, journal
   nginx.conf       # sert les fichiers statiques et relaie /api vers l'API

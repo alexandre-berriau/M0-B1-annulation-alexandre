@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import joblib
+import pandas as pd
 from fastapi import FastAPI, HTTPException
 
 from app.schemas import Booking, PredictionResponse
@@ -41,9 +42,21 @@ def health() -> dict:
 
 @app.post("/predict", response_model=PredictionResponse)
 def predict(booking: Booking) -> PredictionResponse:
-    """Prédit l'annulation d'une réservation.
+    """Prédit l'annulation d'une réservation. Entrée déjà validée par Pydantic."""
+    # 3.1 — le modèle que le lifespan a chargé au démarrage
+    model = state.get("model")
+    if model is None:
+        raise HTTPException(status_code=503, detail="Modèle non chargé")
 
-    TODO 
-    
-    """
-    raise HTTPException(status_code=501, detail="Route /predict pas encore implémentée")
+    # 3.2 — DataFrame d'une ligne : le pipeline sélectionne ses colonnes par nom
+    ligne = pd.DataFrame([booking.model_dump()])[list(model.feature_names_in_)]
+
+    # 3.3 — colonne 1 de predict_proba, car model.classes_ vaut [0, 1]
+    annulation = model.predict(ligne)[0]
+    probabilite = model.predict_proba(ligne)[0, 1]
+
+    # 3.4 — bool() et float() : numpy ne se sérialise pas en JSON
+    return PredictionResponse(
+        annulation=bool(annulation),
+        probabilite_annulation=float(probabilite),
+    )
